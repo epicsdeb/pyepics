@@ -16,7 +16,7 @@ both methods and attributes for accessing it's properties.
 The :class:`PV` class
 =======================
 
-.. class:: PV(pvname[, callback=None[, form='time'[, auto_monitor=None[, connection_callback=None[,  connection_timeout=None[, verbose=False]]]]]] )
+.. class:: PV(pvname[, callback=None[, form='time'[, verbose=False[, auto_monitor=None[, count=None[, connection_callback=None[, connection_timeout=None[, access_callback=None]]]]]]]] )
    create a PV object for a named Epics Process Variable.
 
    :param pvname: name of Epics Process Variable
@@ -24,14 +24,18 @@ The :class:`PV` class
    :type callback: callable, tuple, list or None
    :param form:  which epics *data type* to use:  the 'native', 'time', or the 'ctrl' (Control) variant.
    :type form: string, one of ('native','ctrl', or 'time')
+   :param verbose:  whether to print out debugging messages
+   :type verbose: ``True``/``False``
    :param auto_monitor:  whether to automatically monitor the PV for changes.
    :type auto_monitor: ``None``, ``True``, ``False``, or bitmask (see :ref:`pv-automonitor-label`)
+   :param count: number of data elements to return by default (see :ref:`here <pv-get-label>`)
+   :type count: int
    :param connection_callback: user-defined function called on changes to PV connection status.
    :type connection_callback:  callable or ``None``
    :param connection_timeout:  time (in seconds) to wait for connection before giving up
    :type connection_timeout:  float or ``None``
-   :param verbose:  whether to print out debugging messages
-   :type verbose: ``True``/``False``
+   :param access_callback: user-defined function called on changes to PV access rights
+   :type access_callback: callable or ``None``
 
 Once created, a PV should (barring any network issues) automatically
 connect and be ready to use.
@@ -67,6 +71,10 @@ description of this.
 The *verbose* parameter specifies more verbose output on changes, and is
 intended for debugging purposes.
 
+The *access_callback* parameter specifies a python method to be called on
+changes to the access rights of the PV (read/write access changes). This
+is discussed in more detail :ref:`here <pv-access-rights-callback-label>`.
+
 
 
 methods
@@ -74,6 +82,8 @@ methods
 
 A `PV` has several methods for getting and setting its value and defining
 callbacks to be executed when the PV changes.
+
+..  _pv-get-label:
 
 .. method:: get([, count=None[, as_string=False[, as_numpy=True[, timeout=None[, use_monitor=True]]]]])
 
@@ -143,6 +153,12 @@ completed.   See :ref:`pv-putwait-label` for more details.
    dictionary may have many members, depending on the data type of PV.  See
    the :ref:`Table of Control Attributes <ctrlvars_table>`  for details.
 
+.. method:: get_timevars()
+
+   returns a dictionary of the **time values** for the PV, which
+   include `status`, `severity`, and the `timestamp` from the CA
+   server.
+
 .. method:: poll([evt=1.e-4, [iot=1.0]])
 
    poll for changes.  This simply calls :meth:`ca.poll`
@@ -177,10 +193,21 @@ completed.   See :ref:`pv-putwait-label` for more details.
    if timeout is ``None``, the PVs connection_timeout parameter will be used. If that is also ``None``,
    :data:`ca.DEFAULT_CONNECTION_TIMEOUT`  will be used.
 
-
 .. method:: disconnect()
 
    disconnect a PV, clearing all callbacks.
+
+.. method:: reconnect()
+
+   reconnect (or try to) a disconnected PV.
+
+.. method:: clear_auto_monitor()
+
+   turn off automatic monitoring of a PV.  Note that this will suspend
+   all event callbacks on a PV at the CA level by calling
+   :func:`ca.clear_subscription`, but will not clear the list of PVs
+   callbacks.  This means that doing :meth:`reconnect` will resume
+   event processing including any callbacks or the PV.
 
 .. method:: add_callback(callback=None[, index=None [, with_ctrlvars=True[, **kw]])
 
@@ -234,6 +261,13 @@ completed.   See :ref:`pv-putwait-label` for more details.
 
    See also: :attr:`callbacks`  attribute, :ref:`pv-callbacks-label`
 
+.. method:: force_read_access_rights()
+
+   force a read of the access rights for a PV.  Normally, a PV will
+   have access rights determined automatically and subscribe to
+   changes in access rights.  But sometimes (especially 64-bit
+   Windows), the automatically reported values are wrong.  This
+   methods will explicitly read the access rights.
 
 attributes
 ~~~~~~~~~~
@@ -321,11 +355,28 @@ assigned to.  The exception to this rule is the :attr:`value` attribute.
 
 .. attribute:: timestamp
 
-   Unix (not Epics!!) timestamp of the last seen event for this PV.  Note
-   that this is will contain the timestamp from the Epics record if the PV
-   object was created with the ``form='time'`` option.  Otherwise, the
-   timestamp will be the timestamp according to the client, indicating when
-   the data arrive from the server.
+   floating point timestamp (relative to the POSIX time origin, not the
+   EPICS time origin) of the last event seen for this PV.  Note that this
+   is will contain the timestamp from the Epics server if the PV object was
+   created with the ``form='time'`` option.  Otherwise, the timestamp will
+   be set to time according to the client, indicating when the data arrive
+   from the server.
+
+.. attribute:: posixseconds
+
+   Integer number of seconds (relative to the POSIX time origin, not the
+   EPICS time origin) of the last event seen for this PV.  This will be set
+   only if the PV object was created with the ``form='time'`` option, and
+   will reflect the timestamp from the server.  Otherwise, this value will
+   be 0 which can be used to signal that the `timestamp` attribute is from
+   the client.
+
+.. attribute:: nanoseconds
+
+   Integer number of nanoseconds for the last event seen for this PV.  This
+   will be set only if the PV object was created with the ``form='time'``
+   option, and will give higher time resolution than the `timestamp`
+   attribute.
 
 .. attribute:: precision
 
@@ -385,6 +436,12 @@ assigned to.  The exception to this rule is the :attr:`value` attribute.
    a simple list of connection callbacks: functions to be run when the
    connection status of the PV changes. See
    :ref:`pv-connection_callbacks-label` for more details.
+
+.. attribute:: access_callbacks
+
+   an :attr:`list` of access callbacks: functions to be run when the
+   access rights of the PV changes. See
+   :ref:`pv-access-rights-callback-label` for more details.
 
 ..  _pv-as-string-label:
 
@@ -587,6 +644,19 @@ A connection callback should be prepared to receive the following keyword argume
 where *conn* will be either ``True` or ``False``, specifying whether the PV is
 now connected.   A simple example is given below.
 
+..  _pv-access-rights-callback-label:
+
+User-supplied Access Rights Callback functions
+===============================================
+
+An *access rights* callback is a user-defined function that is called when the
+access rights - read/write permissions - of a PV undergo changes. The callback
+will be invoked upon successful initialization and at all events that change
+a PV's access rights, including disconnection and reconnection events.
+An *access rights* callback can be specified when a PV is created, or can be
+added by appending to the :attr:`access_callbacks` list of the PV object.
+If there are multiple access rights callbacks defined for a PV, they will all
+be run on access rights events.
 
 ..  _pv-putwait-label:
 
@@ -846,3 +916,24 @@ Example of connection callback
 A connection callback:
 
 .. literalinclude:: ../tests/pv_connection_callback.py
+
+Example of an access rights callback
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Associating an access rights callback with a PV::
+
+    import epics
+    import time
+
+    def access_rights_callback(read_access, write_access, pv=None):
+        print "%s - read=%s, write=%s" % (pv.pvname, read_access, write_access)
+
+    # should immediately see the message upon connection
+    apv = epics.PV('pvname', access_callback=access_rights_callback)
+
+    try:
+        start = time.time()
+        while (time.time() - start) < 30:
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass

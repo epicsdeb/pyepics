@@ -208,9 +208,11 @@ the data just hasn't been received yet, but may show up later.
 The *use_monitor* argument sets whether to rely on the monitors from the
 underlying PV.  The default is ``False``, so that each :func:`caget` will
 explicitly ask the value to be sent instead of relying on the automatic
-monitoring normally used for persistent PVs.  If this makes no sense,
-leaving the default value of ``True`` is fine.  For more details on making
-:func:`caget` more efficient, see :ref:`pv-automonitor-label` and
+monitoring normally used for persistent PVs.  This makes :func:`caget` act
+more like command-line tools, and slightly less efficient than creating a
+PV and getting values with it.  If ultimate performance is a concern, using
+monitors is recommended.  For more details on making :func:`caget` more
+efficient, see :ref:`pv-automonitor-label` and
 :ref:`advanced-get-timeouts-label`.
 
 The *as_string* argument tells the function to return the **string
@@ -458,7 +460,7 @@ Status and To-Do List
 The PyEpics package is actively maintained, but the core library seems
 reasonably stable and ready to use in production code.  Features are being
 added slowly, and testing is integrated into development so that the
-changce of introducing bugs into existing codes is minimized.  The package
+chance of introducing bugs into existing codes is minimized.  The package
 is targeted and tested to work with Python 2.6, 2.7, 3.2 and 3.3
 simultaneously (that is, the same code is meant to support all these
 versions).
@@ -472,7 +474,7 @@ There are several desired features are left unfinished:
    <http://code.google.com/p/pcaspy/>`_
 
  * build and improve applications using PyEpics, especially for common data
-   acquistion needs.
+   acquisition needs.
 
  * improve and extend the use of PyQt widgets with PyEpics.
 

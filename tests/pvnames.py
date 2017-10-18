@@ -42,8 +42,7 @@ double_arrays   = ['Py:double128', 'Py:double2k', 'Py:double64k']
 ####
 # provide a single motor prefix (to which '.VAL' and '.RBV' etc will be added)
 
-motor_prefix = '13XRM:'
-motor_list = ['%sm%i' % (motor_prefix, i+1) for i in range(4)]
+motor_list = ['sim:mtr%d' % i for i in range(1, 7)]
 motor1 = motor_list[0]
 motor2 = motor_list[1]
 
@@ -70,3 +69,4 @@ subarr1       = 'Py:subArr1'
 subarr2       = 'Py:subArr2'
 subarr3       = 'Py:subArr3'
 subarr4       = 'Py:subArr4'
+zero_len_subarr1 = 'Py:ZeroLenSubArr1'

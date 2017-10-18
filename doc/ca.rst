@@ -205,6 +205,8 @@ library versions, and include:
 
 .. autofunction:: element_count(chid)
 
+.. autofunction:: replace_access_rights_event(chid, callback=None)
+
 .. autofunction::   read_access(chid)
 
 .. autofunction::   write_access(chid)
@@ -530,21 +532,24 @@ function.
 User-supplied Callback functions
 ================================
 
-User-supplied callback functions can be provided for both :func:`put` and
-:func:`create_subscription`.  Note that callbacks for `PV` objects are
-slightly different: see :ref:`pv-callbacks-label` in the :mod:`pv` module
-for details.
+User-supplied callback functions can be provided for :func:`put`,
+:func:`replace_access_rights_event`, and :func:`create_subscription`.
+Note that callbacks for `PV` objects are slightly different: see
+:ref:`pv-callbacks-label` in the :mod:`pv` module for details.
 
-When defining a callback function to be run either when a :func:`put`
-completes or on changes to the Channel, as set from
-:func:`create_subscription`, it is important to know two things:
+When defining a callback function to be run either when a :func:`put` completes
+or on changes to the Channel, as set from :func:`create_subscription`, or when
+read/write permissions change from :func:`replace_access_rights_event`, it is
+important to know two things:
 
-    1)  how your function will be called.
-    2)  what is permissible to do inside your callback function.
+   1)  how your function will be called.
+   2)  what is permissible to do inside your callback function.
 
-In both cases, callbacks will be called with keyword arguments.  You should be
-prepared to have them passed to your function.  Use `**kw` unless you are very
-sure of what will be sent.
+Callbacks will be called with keyword arguments for :func:`put` and for
+:func:`create_subscription`.  You should be prepared to have them passed to
+your function.  Use `**kw` unless you are very sure of what will be sent.
+For the case of :func:`replace_access_rights_event`, only positional arguments
+will be passed.
 
 For callbacks sent when a :func:`put` completes, your function will be passed these:
 
@@ -561,6 +566,11 @@ pairs that will include:
     * `status`: the status of the PV (1 for OK)
     * `chid`:   the integer address for the channel ID.
 
+For access rights event callbacks, your function will be passed:
+
+    * `read_access`: boolean indicating read access status
+    * `write_access`: boolean indicating write access status
+
 Depending on the data type, and whether the CTRL or TIME variant was used,
 the callback function may also include some of these as keyword arguments:
 
@@ -569,6 +579,8 @@ the callback function may also include some of these as keyword arguments:
     * `units`:  string for PV units
     * `severity`: PV severity
     * `timestamp`: timestamp from CA server.
+    * `posixseconds`: integer seconds since POSIX epoch of timestamp from CA server.
+    * `nanoseconds`: integer nanoseconds of timestamp from CA server.
 
 Note that a the user-supplied callback will be run *inside* a CA function,
 and cannot reliably make any other CA calls.  It is helpful to think "this
@@ -594,10 +606,6 @@ alternatives), though they could be added on request.
    can be used in user code.
 
 .. function:: ca_add_fd_registration
-
-   *Not implemented*
-
-.. function:: ca_replace_access_rights_event
 
    *Not implemented*
 
@@ -750,3 +758,28 @@ callback should be prepared to accept keyword arguments of `pvname`,
 `chid`, and `conn` for the PV name, channel ID, and connection state
 (``True`` or ``False``).
 
+Define an access rights change event callback
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following example demonstrates the addition of a function to be
+called when the access rights of a channel changes. Note this will be
+called immediately after successful installation::
+
+    import epics
+    import time
+    
+    def on_access_rights_change(read_access, write_access):
+        print 'read access = %s, write access = %s' % (read_access, write_access)
+
+    # create a channel and attach the above function for access rights events
+    chid = epics.ca.create_channel('pv_name')
+    # a message should be printed immediately following this registration
+    epics.ca.replace_access_rights_event(chid, callback=on_access_rights_change)
+
+    # Affecting the channel's access rights, (for example, by enabling/disabling
+    # CA Security rules), should produce additional console messages
+    try:
+        while True:
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass

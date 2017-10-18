@@ -4,16 +4,10 @@ from setuptools import setup
 
 import os
 import sys
-import lib
+import epics
 import shutil
 
 import versioneer
-versioneer.VCS = 'git'
-versioneer.versionfile_source = 'lib/_version.py'
-versioneer.versionfile_build = 'epics/_version.py'
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'pyepics-'
-
 
 long_desc = '''Python Interface to the Epics Channel Access protocol
 of the Epics control system.   PyEpics provides 3 layers of access to
@@ -48,27 +42,19 @@ problem before tyring to use the epics package.
 *******************************************************
 """
 
-# for Windows, we provide dlls
-data_files = None
-if os.name == 'nt':
-    try:
-        import platform
-        nbits = platform.architecture()[0]
-    except:
-        nbits = '32bit'
-    if nbits.startswith('64'):
-        data_files = [('DLLs', ['dlls/win64/ca.dll','dlls/win64/Com.dll']),
-                      ('', ['dlls/win64/carepeater.exe'])]        
-    else:
-        data_files = [('DLLs', ['dlls/win32/ca.dll','dlls/win32/Com.dll']),
-                      ('', ['dlls/win32/carepeater.exe'])]
+nolibca = os.environ.get('NOLIBCA', None)
+if nolibca is None:
+    pkg_data = {'epics.clibs': [epics.utils.clib_search_path("ca"),
+                                epics.utils.clib_search_path("Com")],}
+else:
+    pkg_data = dict()
 
 PY_MAJOR, PY_MINOR = sys.version_info[:2]
 if PY_MAJOR == 2 and PY_MINOR < 6:
-    shutil.copy(os.path.join('lib', 'utils3.py'),
-                os.path.join('lib', 'utils3_save_py.txt'))
-    shutil.copy(os.path.join('lib', 'utils2.py'),
-                os.path.join('lib', 'utils3.py'))
+    shutil.copy(pjoin('epics', 'utils3.py'),
+                pjoin('epics', 'utils3_save_py.txt'))
+    shutil.copy(pjoin('epics', 'utils2.py'),
+                pjoin('epics', 'utils3.py'))
 
 setup(name = 'pyepics',
       version = versioneer.get_version(),
@@ -76,7 +62,7 @@ setup(name = 'pyepics',
       author       = 'Matthew Newville',
       author_email = 'newville@cars.uchicago.edu',
       url          = 'http://pyepics.github.io/pyepics/',
-      download_url = 'http://pyepics.github.io/pyepics/',      
+      download_url = 'http://pyepics.github.io/pyepics/',
       license      = 'Epics Open License',
       description  = "Epics Channel Access for Python",
       long_description = long_desc,
@@ -84,15 +70,13 @@ setup(name = 'pyepics',
       classifiers  = ['Intended Audience :: Science/Research',
                       'Operating System :: OS Independent',
                       'Programming Language :: Python',
-                      'Topic :: Scientific/Engineering'],      
-      package_dir = {'epics': 'lib'},
-      packages = ['epics','epics.wx','epics.devices',
-                  'epics.compat', 'epics.autosave'],
-      data_files = data_files )
+                      'Topic :: Scientific/Engineering'],
+      packages = ['epics','epics.wx','epics.devices', 'epics.compat',
+                  'epics.autosave', 'epics.clibs'],
+      package_data = pkg_data,
+     )
 
 try:
-    libca = lib.ca.find_libca() 
-    sys.stdout.write("\n  Will use CA library at:  %s \n\n" % libca)
+    libca = epics.ca.find_libca()
 except:
     sys.stdout.write("%s" % no_libca)
-

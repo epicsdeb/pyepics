@@ -370,7 +370,7 @@ attribute cannot do so::
    +---------------+----------------------------------------------------------------+
    |        0      | move-with-wait finish OK.                                      |
    +---------------+----------------------------------------------------------------+
-   |        0      | move-without-wait executed, not cpmfirmed.                     |
+   |        0      | move-without-wait executed, not confirmed.                     |
    +---------------+----------------------------------------------------------------+
    |        1      | move-without-wait executed, move confirmed.                    |
    +---------------+----------------------------------------------------------------+
@@ -474,7 +474,7 @@ includes a Device for an Epics ai (analog input record).  The full
 implementation of this device is:
 
 
-.. literalinclude:: ../lib/devices/ai.py
+.. literalinclude:: ../epics/devices/ai.py
 
 The code simply pre-defines the fields that are the *suffixes* of an Epics ai
 input record, and subclasses :class:`Device` with these fields to create the
@@ -505,7 +505,7 @@ For a slightly more complicated example: an incomplete, but very useful mapping
 of the Scaler Record from synApps, including methods for changing modes, and
 reading and writing data.
 
-.. literalinclude:: ../lib/devices/scaler.py
+.. literalinclude:: ../epics/devices/scaler.py
 
 Note that we can then create a :class:`scaler` object from its base PV
 prefix, and use methods like :meth:`Count` and :meth:`Read` without
@@ -534,7 +534,7 @@ code for these modules.
 
 .. _devices_table:
 
-   Table of Epics Devices Included in the PyEpics distribtion.  For those
+   Table of Epics Devices Included in the PyEpics distribution.  For those
    described as "pretty basic", there are generally only PV suffixes to
    attributes mapped.  Many of the others include one or more methods for
    specific use of that Device.
@@ -577,4 +577,5 @@ code for these modules.
 +----------------+-----------------+------------------------------------------------+
 | transform      | Transform       | epics userTransform record                     |
 +----------------+-----------------+------------------------------------------------+
-
+| xspress3       | Xspress3        | Quantum Electronics Xspress3 Multi-MCA         |
++----------------+-----------------+------------------------------------------------+

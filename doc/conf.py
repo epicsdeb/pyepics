@@ -23,7 +23,7 @@ import sys, os
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.extlinks',
-              'sphinx.ext.coverage', 'sphinx.ext.pngmath', 'numpydoc']
+              'sphinx.ext.coverage', 'sphinx.ext.mathjax', 'numpydoc']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -49,9 +49,15 @@ copyright = u'2014, Matthew Newville'
 try:
     import epics
     release = epics.__version__
+    if '-' in release:
+        a, b = release.split('-', 1)
+        release = a
+    if '_' in release:
+        a, b = release.split('_', 1)
+        release = a
     # The full version, including alpha/beta/rc tags.
 except ImportError:
-    release = '3.0.X'
+    release = '3.X.Y'
 
 print 'Building Docs for EPICS version %s / Python version %s ' % (release, sys.version)
 
@@ -131,7 +137,7 @@ html_static_path = ['_static']
 
 # If true, SmartyPants will be used to convert quotes and dashes to
 # typographically correct entities.
-html_use_smartypants = True
+#  html_use_smartypants = True
 
 # Custom sidebar templates, maps document names to template names.
 html_sidebars = {'index': ['indexsidebar.html','searchbox.html']}

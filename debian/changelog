@@ -1,18 +1,160 @@
-pyepics (3.2.4-3) unstable; urgency=low
+pyepics (3.3.0-1) unstable; urgency=low
 
-  * Official release of upstream 3.2.4.
-  * Fixes to dbr TIME and array-data handling
+  [ Daron Chabot ]
+  * MNT: move clib dir
+  * ENH: use package_data to install c libs
+  * FIX: make clibs a pkg
+  * MNT: refactor c lib path discovery
+  * FIX: NOLIBCA case
+  * CLN: legacy lib search method
+  * CLN: misleading installation text
+  * TST: do not exec tests from source dir
 
- -- Daron Chabot <dchabot@bnl.gov>  Mon, 23 Feb 2015 12:20:49 -0500
+  [ Matt Newville ]
+  * fix access rights structure for Py2 and Win64
 
-pyepics (3.2.4-2) unstable; urgency=low
+  [ Daron Chabot ]
+  * TST: make conda libca discoverable if defining NOLIBCA
+  * BUG: search and load libca only
+  * CLN/TST: debug statements
+  * CLN/TST: remove support for excised code path
+  * CLN/TST: conda channels
+  * CLN/TST: unnecessary conda installs
+  * CLN/TST: unnecessary conda env activation
+  * CLN/TST: why?
+  * TST: matrix versions
+  * TST: library installation
+  * MNT: swallow process shutdown errors
 
-  * Add build dependency on libepics3.14.12.3.
+  [ Matt Newville ]
+  * return loading of libCom (needed on Windows!)
+  * need to preload libCom on Windows
+  * use PYEPICS_LIBCA to point toward location of libCom
+  * add AutoSaver class for better repeated saves
 
- -- Daron Chabot <dchabot@bnl.gov>  Mon, 03 Nov 2014 23:08:04 -0500
+  [ Matthew Newville ]
+  * tweaks to AutoSaver code and add docs
 
-pyepics (3.2.4-1) unstable; urgency=low
+  [ Daron Chabot ]
+  * FIX: osx rpath in libca
+  * MNT: do attempt disconnect if libca is None
 
-  * source package automatically created by stdeb 0.6.0+git
+  [ Matthew Newville ]
+  * fix typo
 
- -- Daron Chabot <dchabot@bnl.gov>  Wed, 08 Oct 2014 14:10:34 -0400
+  [ Hugo Slepicka ]
+  * FIX: Removing StandardError
+
+  [ Matt Newville ]
+  * fix simple typo
+
+  [ Daron Chabot ]
+  * DOC: CI testing python versions
+  * DOC: quick installation details
+  * DOC: convert to markdown
+  * DOC: badges
+  * DOC: code block hightlighting
+  * DOC: list formatting
+  * DOC: formatting
+  * DOC: content
+  * DOC: headings
+
+  [ Matt Newville ]
+  * doc changes for 3.3.0
+
+  [ Matthew Newville ]
+  * doc tweaks
+  * update install doc
+  * more doc tweaks
+  * ran spellchecker (much needed)
+
+ -- Daron Chabot <chabot@frib.msu.edu>  Mon, 16 Oct 2017 16:45:29 -0400
+
+pyepics (3.2.7-2) unstable; urgency=low
+
+  * MNT: avoid prefab libs
+
+ -- Daron Chabot <chabot@frib.msu.edu>  Thu, 07 Sep 2017 14:37:33 -0400
+
+pyepics (3.2.7-1) unstable; urgency=low
+
+  [ Vintar Rok ]
+  * Fix puting single value to waveform of strings.
+  * unit tests for waveforms of strings
+
+  [ Thomas A Caswell ]
+  * BLD: add env to suppress installing libca / libcom binaries
+
+  [ dchabot ]
+  * Update .travis.yml
+  * Update .travis.yml
+  * Update .travis.yml
+  * Update .travis.yml
+  * Update .travis.yml
+  * Update .travis.yml
+
+  [ Thomas A Caswell ]
+  * MNT: revert small logic change
+  * CI: expand test matrix
+  * FIX: also find libCom
+  * FIX: find libCom _first_ to defeat the system library search tools
+
+  [ Steven Hartman ]
+  * WIP: testing pyepics with IronPython 32-bit
+  * WIP: get_cache change for IronPyhon
+  * WIP: hide IronPython workarounds from non-IronPython implementations
+  * better check for IronPython
+  * typo
+  * change isIronPython function to IRON_PYTHON bool
+
+  [ Rok Vintar ]
+  * fix differnet behaviour of putting mixed types array to the waveform of strings in py2 and py3
+
+  [ Eran Greenberg ]
+  * fix typo in use_anaconda.bat
+
+  [ Matt Newville ]
+  * use PYTHONIOENCODING envvar and utf-8 as default string encoding
+  * fix line ending and use str.strip() for fastconn_pvlist.txt
+  * add  for string_waveform tests
+  * udate simulator to pause longer (up to 120 sec)
+  * add small, maybe unneeded, sleeps to string waveform tests
+  * add clear_auto_monitor() to call ca.clear_subscription
+  * fix typo for testing windows-ness
+  * tweaks to search path for find_lib, avoiding `None`
+  * add and use PV.force_read_access_rights(), as access rights events seem wrong on Windows64
+  * subarray test needs to use integers for slices
+  * update PV document to add new methods
+  * doc build should use mathjax
+  * doc: don't use html_smartypants
+
+  [ Daron Chabot ]
+  * MNT: bump upstream hardcoded version number
+
+ -- Daron Chabot <chabot@frib.msu.edu>  Thu, 07 Sep 2017 14:12:52 -0400
+
+pyepics (3.2.6-2) unstable; urgency=low
+
+  * MNT: gitattributes plus gbp-buildpackage equals trouble
+  * BLD: add generated debian files
+  * BLD: dependencies
+  * BLD: omit versioneer's influence
+  * BLD: versioning
+  * BLD: minimal makefile
+  * ENH: upstream repo locations
+  * BLD: rules tweaks - versioneer
+  * BLD: remove versioneer
+  * BLD: autoclean
+  * BLD: do not install pkgd libca, libCom
+  * BLD: override lintian complaints
+  * BLD: rm egg-info
+  * BLD: re-organize patches
+  * BLD: ignore effect of git export on _version
+
+ -- Daron Chabot <chabot@frib.msu.edu>  Mon, 22 May 2017 10:39:57 -0400
+
+pyepics (3.2.6-1) unstable; urgency=low
+
+  * source package automatically created by stdeb 0.8.5
+
+ -- Daron Chabot <chabot@frib.msu.edu>  Wed, 17 May 2017 17:11:54 -0400

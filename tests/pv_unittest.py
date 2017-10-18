@@ -6,6 +6,7 @@ import sys
 import time
 import unittest
 import numpy
+from contextlib import contextmanager
 from epics import PV, caput, caget, ca
 
 import pvnames
@@ -27,17 +28,21 @@ def onChanges(pvname=None, value=None, **kws):
     global CHANGE_DAT
     CHANGE_DAT[pvname] = value
 
-def pause_updating():
-    caput(pvnames.pause_pv, 1)
+@contextmanager
+def no_simulator_updates():
+    '''Context manager which pauses and resumes simulator PV updating'''
+    try:
+        caput(pvnames.pause_pv, 1)
+        yield
+    finally:
+        caput(pvnames.pause_pv, 0)
 
-def resume_updating():
-    caput(pvnames.pause_pv, 0)
 
 class PV_Tests(unittest.TestCase):
     def testA_CreatePV(self):
         write('Simple Test: create pv\n')
         pv = PV(pvnames.double_pv)
-        self.assertNotEqual(pv, None)
+        self.assertIsNot(pv, None)
 
     def testA_CreatedWithConn(self):
         write('Simple Test: create pv with conn callback\n')
@@ -54,37 +59,38 @@ class PV_Tests(unittest.TestCase):
         pvs = (pvnames.double_pv, pvnames.enum_pv, pvnames.str_pv)
         for p in pvs:
             val = caget(p)
-            self.assertNotEqual(val, None)
+            self.assertIsNot(val, None)
         sval = caget(pvnames.str_pv)
         self.assertEqual(sval, 'ao')
 
     def test_get1(self):
         write('Simple Test: test value and char_value on an integer\n')
-        pause_updating()
-        pv = PV(pvnames.int_pv)
-        val = pv.get()
-        cval = pv.get(as_string=True)
+        with no_simulator_updates():
+            pv = PV(pvnames.int_pv)
+            val = pv.get()
+            cval = pv.get(as_string=True)
 
-        self.failUnless(int(cval)== val)
-        resume_updating()
+            self.failUnless(int(cval)== val)
 
-
-    def test_stringarray(self):
+    def test_get_string_waveform(self):
         write('String Array: \n')
-        pause_updating()
-        pv = PV(pvnames.string_arr_pv)
-        val = pv.get()
-        self.failUnless(len(val) > 10)
-        self.failUnless(isinstance(val[0], str))
-        self.failUnless(len(val[0]) > 1)
-        self.failUnless(isinstance(val[1], str))
-        self.failUnless(len(val[1]) > 1)
-        resume_updating()
+        with no_simulator_updates():
+            pv = PV(pvnames.string_arr_pv)
+            val = pv.get()
+            self.failUnless(len(val) > 10)
+            self.assertIsInstance(val[0], str)
+            self.failUnless(len(val[0]) > 1)
+            self.assertIsInstance(val[1], str)
+            self.failUnless(len(val[1]) > 1)
 
     def test_putcomplete(self):
         write('Put with wait and put_complete (using real motor!) \n')
         vals = (1.35, 1.50, 1.44, 1.445, 1.45, 1.453, 1.446, 1.447, 1.450, 1.450, 1.490, 1.5, 1.500)
         p = PV(pvnames.motor1)
+        # this works with a real motor, fail if it doesn't connect quickly
+        if not p.wait_for_connection(timeout=0.2):
+            self.skipTest('Unable to connect to real motor record')
+
         see_complete = []
         for v in vals:
             t0 = time.time()
@@ -102,10 +108,14 @@ class PV_Tests(unittest.TestCase):
     def test_putwait(self):
         write('Put with wait (using real motor!) \n')
         pv = PV(pvnames.motor1)
+        # this works with a real motor, fail if it doesn't connect quickly
+        if not pv.wait_for_connection(timeout=0.2):
+            self.skipTest('Unable to connect to real motor record')
+
         val = pv.get()
 
         t0 = time.time()
-        if  val < 5:
+        if val < 5:
             pv.put(val + 1.0, wait=True)
         else:
             pv.put(val - 1.0, wait=True)
@@ -171,6 +181,54 @@ class PV_Tests(unittest.TestCase):
         self.failUnless(len(NEWVALS) > 3)
         mypv.clear_callbacks()
 
+    def test_put_string_waveform(self):
+        write('String Array: put\n')
+        with no_simulator_updates():
+            pv = PV(pvnames.string_arr_pv)
+            put_value = ['a', 'b', 'c']
+            pv.put(put_value, wait=True)
+            get_value = pv.get(use_monitor=False, as_numpy=False)
+            numpy.testing.assert_array_equal(get_value, put_value)
+
+    def test_put_string_waveform_single_element(self):
+        write('String Array: put single element\n')
+        with no_simulator_updates():
+            pv = PV(pvnames.string_arr_pv)
+            put_value = ['a']
+            pv.put(put_value, wait=True)
+            time.sleep(0.05)
+            get_value = pv.get(use_monitor=False, as_numpy=False)
+            self.failUnless(put_value[0] == get_value)
+
+    def test_put_string_waveform_mixed_types(self):
+        write('String Array: put mixed types\n')
+        with no_simulator_updates():
+            pv = PV(pvnames.string_arr_pv)
+            put_value = ['a', 2, 'b']
+            pv.put(put_value, wait=True)
+            time.sleep(0.05)
+            get_value = pv.get(use_monitor=False, as_numpy=False)
+            numpy.testing.assert_array_equal(get_value, ['a', '2', 'b'])
+
+    def test_put_string_waveform_empty_list(self):
+        write('String Array: put empty list\n')
+        with no_simulator_updates():
+            pv = PV(pvnames.string_arr_pv)
+            put_value = []
+            pv.put(put_value, wait=True)
+            time.sleep(0.05)
+            get_value = pv.get(use_monitor=False, as_numpy=False)
+            self.failUnless('' == ''.join(get_value))
+
+    def test_put_string_waveform_zero_length_strings(self):
+        write('String Array: put zero length strings\n')
+        with no_simulator_updates():
+            pv = PV(pvnames.string_arr_pv)
+            put_value = ['', '', '']
+            pv.put(put_value, wait=True)
+            time.sleep(0.05)
+            get_value = pv.get(use_monitor=False, as_numpy=False)
+            numpy.testing.assert_array_equal(get_value, put_value)
 
     def test_subarrays(self):
         write("Subarray test:  dynamic length arrays\n")
@@ -214,9 +272,104 @@ class PV_Tests(unittest.TestCase):
         self.assertEqual(len(subval), 5)
         self.failUnless(numpy.all(subval == full_data[13:5+13]))
 
+    def test_subarray_zerolen(self):
+        subarr1 = PV(pvnames.zero_len_subarr1)
+        subarr1.wait_for_connection()
+
+        val = subarr1.get(use_monitor=True, as_numpy=True)
+        self.assertIsInstance(val, numpy.ndarray, msg='using monitor')
+        self.assertEquals(len(val), 0, msg='using monitor')
+        self.assertEquals(val.dtype, numpy.float64, msg='using monitor')
+
+        val = subarr1.get(use_monitor=False, as_numpy=True)
+        self.assertIsInstance(val, numpy.ndarray, msg='no monitor')
+        self.assertEquals(len(val), 0, msg='no monitor')
+        self.assertEquals(val.dtype, numpy.float64, msg='no monitor')
+
+
+    def test_waveform_get_with_count_arg(self):
+        with no_simulator_updates():
+            wf = PV(pvnames.char_arr_pv, count=32)
+            val=wf.get()
+            self.assertEquals(len(val), 32)
+
+            val=wf.get(count=wf.nelm)
+            self.assertEquals(len(val), wf.nelm)
+
+
+    def test_waveform_callback_with_count_arg(self):
+        values = []
+
+        wf = PV(pvnames.char_arr_pv, count=32)
+        def onChanges(pvname=None, value=None, char_value=None, **kw):
+            write( 'PV %s %s, %s Changed!\n' % (pvname, repr(value), char_value))
+            values.append( value)
+
+        wf.add_callback(onChanges)
+        write('Added a callback.  Now wait for changes...\n')
+
+        t0 = time.time()
+        while time.time() - t0 < 3:
+            time.sleep(1.e-4)
+            if len(values)>0:
+                break
+
+        self.failUnless(len(values) > 0)
+        self.assertEquals(len(values[0]),32)
+
+        wf.clear_callbacks()
+
+
+
+    def test_emptyish_char_waveform_no_monitor(self):
+        '''a test of a char waveform of length 1 (NORD=1): value "\0"
+        without using auto_monitor
+        '''
+        with no_simulator_updates():
+            zerostr = PV(pvnames.char_arr_pv, auto_monitor=False)
+            zerostr.wait_for_connection()
+
+            # elem_count = 128, requested count = None, libca returns count = 1
+            zerostr.put([0], wait=True)
+            self.assertEquals(zerostr.get(as_string=True), '')
+            numpy.testing.assert_array_equal(zerostr.get(as_string=False), [0])
+            self.assertEquals(zerostr.get(as_string=True, as_numpy=False), '')
+            numpy.testing.assert_array_equal(zerostr.get(as_string=False, as_numpy=False), [0])
+
+            # elem_count = 128, requested count = None, libca returns count = 2
+            zerostr.put([0, 0], wait=True)
+            self.assertEquals(zerostr.get(as_string=True), '')
+            numpy.testing.assert_array_equal(zerostr.get(as_string=False), [0, 0])
+            self.assertEquals(zerostr.get(as_string=True, as_numpy=False), '')
+            numpy.testing.assert_array_equal(zerostr.get(as_string=False, as_numpy=False), [0, 0])
+
+    def test_emptyish_char_waveform_monitor(self):
+        '''a test of a char waveform of length 1 (NORD=1): value "\0"
+        with using auto_monitor
+        '''
+        with no_simulator_updates():
+            zerostr = PV(pvnames.char_arr_pv, auto_monitor=True)
+            zerostr.wait_for_connection()
+
+            zerostr.put([0], wait=True)
+            time.sleep(0.2)
+
+            self.assertEquals(zerostr.get(as_string=True), '')
+            numpy.testing.assert_array_equal(zerostr.get(as_string=False), [0])
+            self.assertEquals(zerostr.get(as_string=True, as_numpy=False), '')
+            numpy.testing.assert_array_equal(zerostr.get(as_string=False, as_numpy=False), [0])
+
+            zerostr.put([0, 0], wait=True)
+            time.sleep(0.2)
+
+            self.assertEquals(zerostr.get(as_string=True), '')
+            numpy.testing.assert_array_equal(zerostr.get(as_string=False), [0, 0])
+            self.assertEquals(zerostr.get(as_string=True, as_numpy=False), '')
+            numpy.testing.assert_array_equal(zerostr.get(as_string=False, as_numpy=False), [0, 0])
+
     def testEnumPut(self):
         pv = PV(pvnames.enum_pv)
-        self.assertNotEqual(pv, None)
+        self.assertIsNot(pv, None)
         pv.put('Stop')
         time.sleep(0.1)
         val = pv.get()
@@ -243,40 +396,55 @@ class PV_Tests(unittest.TestCase):
         pvlist = (pvnames.char_arr_pv,
                   pvnames.long_arr_pv,
                   pvnames.double_arr_pv)
-        pause_updating()
-        chids = []
-        for name in pvlist:
-            chid = ca.create_channel(name)
-            ca.connect_channel(chid)
-            chids.append((chid, name))
-            ca.poll(evt=0.025, iot=5.0)
-        ca.poll(evt=0.05, iot=10.0)
+        with no_simulator_updates():
+            chids = []
+            for name in pvlist:
+                chid = ca.create_channel(name)
+                ca.connect_channel(chid)
+                chids.append((chid, name))
+                ca.poll(evt=0.025, iot=5.0)
+            ca.poll(evt=0.05, iot=10.0)
 
-        values = {}
-        for chid, name in chids:
-            values[name] = ca.get(chid)
-        for promotion in ('ctrl', 'time'):
-            for chid, pvname in chids:
-                write('=== %s  chid=%s as %s\n' % (ca.name(chid),
-                                                   repr(chid), promotion))
-                time.sleep(0.01)
-                if promotion == 'ctrl':
-                    ntype = ca.promote_type(chid, use_ctrl=True)
-                else:
-                    ntype = ca.promote_type(chid, use_time=True)
+            values = {}
+            for chid, name in chids:
+                values[name] = ca.get(chid)
+            for promotion in ('ctrl', 'time'):
+                for chid, pvname in chids:
+                    write('=== %s  chid=%s as %s\n' % (ca.name(chid),
+                                                       repr(chid), promotion))
+                    time.sleep(0.01)
+                    if promotion == 'ctrl':
+                        ntype = ca.promote_type(chid, use_ctrl=True)
+                    else:
+                        ntype = ca.promote_type(chid, use_time=True)
 
-                val  = ca.get(chid, ftype=ntype)
-                cval = ca.get(chid, as_string=True)
-                for a, b in zip(val, values[pvname]):
-                    self.assertEqual(a, b)
-
-        resume_updating()
+                    val  = ca.get(chid, ftype=ntype)
+                    cval = ca.get(chid, as_string=True)
+                    for a, b in zip(val, values[pvname]):
+                        self.assertEqual(a, b)
 
     def test_waveform_get_1elem(self):
         pv = PV(pvnames.double_arr_pv)
         val = pv.get(count=1, use_monitor=False)
         self.failUnless(isinstance(val, numpy.ndarray))
         self.failUnless(len(val), 1)
+
+    def test_subarray_1elem(self):
+        with no_simulator_updates():
+            # pv = PV(pvnames.zero_len_subarr1)
+            pv = PV(pvnames.double_arr_pv)
+            pv.wait_for_connection()
+
+            val = pv.get(count=1, use_monitor=False)
+            print('val is', val, type(val))
+            self.assertIsInstance(val, numpy.ndarray)
+            self.assertEqual(len(val), 1)
+
+            val = pv.get(count=1, as_numpy=False, use_monitor=False)
+            print('val is', val, type(val))
+            self.assertIsInstance(val, list)
+            self.assertEqual(len(val), 1)
+
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase( PV_Tests)
@@ -287,4 +455,3 @@ if __name__ == '__main__':
 #                              callback=onConnect)
 #
 #     time.sleep(0.1)
-
