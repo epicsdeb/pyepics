@@ -8,6 +8,7 @@ basic device object defined
 from .ca import poll
 from .pv  import get_pv
 import time
+
 class Device(object):
     """A simple collection of related PVs, sharing a common prefix
     string for their names, but having many 'attributes'.
@@ -124,14 +125,12 @@ class Device(object):
 
         if attrs is not None:
             for attr in attrs:
-                self.PV(attr, connect=False,
-                        connection_timeout=timeout)
+                self.PV(attr, connect=False, timeout=timeout)
 
         if aliases:
             for attr in aliases.values():
                 if attrs is None or attr not in attrs:
-                    self.PV(attr, connect=False,
-                            connection_timeout=timeout)
+                    self.PV(attr, connect=False, timeout=timeout)
 
         if with_poll:
             poll()
@@ -183,10 +182,11 @@ class Device(object):
         return thispv.put(value, wait=wait, use_complete=use_complete,
                           timeout=timeout)
 
-    def get(self, attr, as_string=False, count=None):
+    def get(self, attr, as_string=False, count=None, timeout=None):
         """get an attribute value,
         option as_string returns a string representation"""
-        return self.PV(attr).get(as_string=as_string, count=count)
+        return self.PV(attr).get(as_string=as_string, count=count,
+                                 timeout=timeout)
 
     def save_state(self):
         """return a dictionary of the values of all
@@ -305,9 +305,9 @@ class Device(object):
 
     def __dir__(self):
         # there's no cleaner method to do this until Python 3.3
-        all_attrs = set(self._aliases.keys() + self._pvs.keys() +
-                        list(self._nonpvs) + 
-                        self.__dict__.keys() + dir(Device))
+        all_attrs = set(list(self._aliases.keys()) + list(self._pvs.keys()) +
+                        list(self._nonpvs) +
+                        list(self.__dict__.keys()) + dir(Device))
         return list(sorted(all_attrs))
 
     def __repr__(self):

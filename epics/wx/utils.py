@@ -9,9 +9,15 @@ import wx.lib.masked as masked
 
 import os
 import array
-from string import maketrans
+import six
+if six.PY3:
+    maketrans = str.maketrans
+else:
+    from string import maketrans
 
-import fpformat
+BAD_FILECHARS = ';~,`!%$@$&^?*#:"/|\'\\\t\r\n (){}[]<>'
+GOOD_FILECHARS = '_'*len(BAD_FILECHARS)
+TRANS_FILE = maketrans(BAD_FILECHARS, GOOD_FILECHARS)
 
 HAS_NUMPY = False
 try:
@@ -82,7 +88,7 @@ def pack(window, sizer):
 def add_button(parent, label, size=(-1, -1), action=None):
     "add simple button with bound action"
     thisb = wx.Button(parent, label=label, size=size)
-    if hasattr(action, '__call__'):
+    if callable(action):
         thisb.Bind(wx.EVT_BUTTON, action)
     return thisb
 
@@ -90,7 +96,7 @@ def add_menu(parent, menu, label='', text='', action=None):
     "add submenu"
     wid = wx.NewId()
     menu.Append(wid, label, text)
-    if hasattr(action, '__call__'):
+    if callable(action):
         parent.Bind(wx.EVT_MENU, action, id=wid)
 
 def popup(parent, message, title, style=None):
@@ -115,8 +121,7 @@ def fix_filename(fname):
     fix string to be a 'good' filename. This may be a more
     restrictive than the OS, but avoids nasty cases.
     """
-    bchars = ' <>:"\'\\\t\r\n/|?*!%$'
-    out = fname.translate(maketrans(bchars, '_'*len(bchars)))
+    out = str(s).translate(TRANS_FILE)
     if out[0] in '-,;[]{}()~`@#':
         out = '_%s' % out
     return out
@@ -210,7 +215,7 @@ class Closure:
 
     def __call__(self,  *args, **kws):
         self.kws.update(kws)
-        if hasattr(self.func, '__call__'):
+        if callable(self.func):
             self.args = args
             return self.func(*self.args, **self.kws)
 
@@ -271,7 +276,7 @@ class FloatCtrl(wx.TextCtrl):
 
     def SetAction(self, action, **kws):
         "set callback action"
-        if hasattr(action,'__call__'):
+        if callable(action):
             self.__action = Closure(action, **kws)
 
     def SetPrecision(self, prec=0):
@@ -303,7 +308,7 @@ class FloatCtrl(wx.TextCtrl):
         if value is not None:
             wx.TextCtrl.SetValue(self, self.format % value)
 
-        if self.is_valid and hasattr(self.__action, '__call__') and act:
+        if self.is_valid and callable(self.__action) and act:
             self.__action(value=self.__val)
         elif not self.is_valid and self.bell_on_invalid:
             wx.Bell()
@@ -313,7 +318,7 @@ class FloatCtrl(wx.TextCtrl):
     def OnKillFocus(self, event):
         "focus lost"
         self.__GetMark()
-        if self.act_on_losefocus and hasattr(self.__action, '__call__'):
+        if self.act_on_losefocus and callable(self.__action):
             self.__action(value=self.__val)
         event.Skip()
 
@@ -366,7 +371,7 @@ class FloatCtrl(wx.TextCtrl):
 
     def GetValue(self):
         if self.__prec > 0:
-            return set_float(fpformat.fix(self.__val, self.__prec))
+            return set_float("%%.%ig" % (self.__prec) % (self.__val))
         else:
             return int(self.__val)
 
