@@ -1,0 +1,15 @@
+Document: python3-pyepics-doc
+Title: pyepics Manual
+Author: Matt Newville <newville@cars.uchicago.edu>
+Abstract: PyEpics is an interface for the Channel Access (CA) library of the
+ Epics Control System to the Python Programming language. The pyepics package
+ provides a base epics module to python, with methods for  reading from and
+ writing to Epics Process Variables (PVs) via the CA protocol.
+ The package includes a thin and fairly complete layer over the low-level
+ Channel Access library in the ca module, and higher level abstractions built
+ on top of this basic functionality.
+Section: Programming/Python
+
+Format: HTML
+Index: /usr/share/doc/python3-pyepics-doc/html/index.html
+Files: /usr/share/doc/python3-pyepics-doc/html/*

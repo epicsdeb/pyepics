@@ -7,13 +7,19 @@ try:
 except:
     PyDeadObjectError = Exception
 
+import six
 import time
 import sys
 import epics
 import wx.lib.buttons as buttons
 import wx.lib.agw.floatspin as floatspin
 
-from utils import Closure, FloatCtrl, set_float
+try:
+    from wx._core import PyDeadObjectError
+except:
+    PyDeadObjectError = Exception
+
+from .utils import Closure, FloatCtrl, set_float
 
 def EpicsFunction(f):
     """decorator to wrap function in a wx.CallAfter() so that
@@ -166,7 +172,7 @@ class PVMixin(object):
             return
         if isinstance(pv, epics.PV):
             self.pv = pv
-        elif isinstance(pv, (str, unicode)):
+        elif isinstance(pv, six.string_types):
             form = "ctrl" if len(self._fg_colour_alarms) > 0 or len(self._bg_colour_alarms) > 0 else "native"
             self.pv = epics.get_pv(pv, form=form)
             self.pv.connect()
@@ -563,7 +569,9 @@ class PVStaticText(wx.StaticText, PVMixin):
         This can be overriden or disabled as constructor
         parameters
         """
-    def __init__(self, parent, pv=None, style=None, **kw):
+    def __init__(self, parent, pv=None, style=None,
+                 minor_alarm="DARKRED", major_alarm="RED",
+                 invalid_alarm="ORANGERED", **kw):
         wstyle = wx.ALIGN_LEFT
         if style is not None:
             wstyle = style
@@ -571,6 +579,11 @@ class PVStaticText(wx.StaticText, PVMixin):
         wx.StaticText.__init__(self, parent, wx.ID_ANY, label='',
                                style=wstyle, **kw)
         PVMixin.__init__(self, pv=pv)
+        self._fg_colour_alarms = {
+            epics.MINOR_ALARM : minor_alarm,
+            epics.MAJOR_ALARM : major_alarm,
+            epics.INVALID_ALARM : invalid_alarm }
+
 
     def _SetValue(self, value):
         "set widget label"
@@ -603,7 +616,7 @@ class PVEnumButtons(wx.Panel, PVCtrlMixin):
             return
         if isinstance(pv, epics.PV):
             self.pv = pv
-        elif isinstance(pv, (str, unicode)):
+        elif isinstance(pv, six.string_types):
             self.pv = epics.get_pv(pv)
             self.pv.connect()
 
@@ -668,7 +681,7 @@ class PVEnumChoice(wx.Choice, PVCtrlMixin):
             return
         if isinstance(pv, epics.PV):
             self.pv = pv
-        elif isinstance(pv, (str, unicode)):
+        elif isinstance(pv, six.string_types):
             self.pv = epics.get_pv(pv)
             self.pv.connect()
 
@@ -683,8 +696,8 @@ class PVEnumChoice(wx.Choice, PVCtrlMixin):
 
         self.Bind(wx.EVT_CHOICE, self._onChoice)
 
-        pv_value = pv.get(as_string=True)
-        enum_strings = pv.enum_strs
+        pv_value = self.pv.get(as_string=True)
+        enum_strings = self.pv.enum_strs
 
         self.Clear()
         self.AppendItems(enum_strings)
@@ -752,7 +765,7 @@ class PVFloatCtrl(FloatCtrl, PVCtrlMixin):
         "set pv, either an epics.PV object or a pvname"
         if isinstance(pv, epics.PV):
             self.pv = pv
-        elif isinstance(pv, (str, unicode)):
+        elif isinstance(pv, six.string_types):
             self.pv = epics.get_pv(pv)
         if self.pv is None:
             return
@@ -873,7 +886,7 @@ class PVCheckBox(wx.CheckBox, PVCtrlMixin):
             self.Value = (value == self.on_value)
         else:
             self.Value = bool(self.pv.get())
-        if hasattr(self.OnChange, '__call__'):
+        if callable(self.OnChange):
             self.OnChange(self)
 
     @EpicsFunction
@@ -1008,7 +1021,7 @@ class PVButton(wx.Button, PVCtrlMixin):
         PVCtrlMixin.__init__(self, pv=pv, font="", fg=None, bg=None)
         self.pushValue = pushValue
         self.Bind(wx.EVT_BUTTON, self.OnPress)
-        if isinstance(disablePV, (str, unicode)):
+        if isinstance(disablePV, six.string_types):
             disablePV = epics.get_pv(disablePV)
             disablePV.connect()
         self.disablePV = disablePV
@@ -1197,7 +1210,8 @@ class PVCollapsiblePane(wx.CollapsiblePane, PVCtrlMixin):
     from a PV value
     """
 
-    def __init__(self, parent, pv=None, minor_alarm="DARKRED", major_alarm="RED", invalid_alarm="ORANGERED", **kw):
+    def __init__(self, parent, pv=None, minor_alarm="DARKRED", major_alarm="RED",
+                 invalid_alarm="ORANGERED", **kw):
         wx.CollapsiblePane.__init__(self, parent, **kw)
         PVCtrlMixin.__init__(self, pv=pv, font=None, fg=None, bg=None)
         self._fg_colour_alarms = {
