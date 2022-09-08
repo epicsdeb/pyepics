@@ -61,13 +61,16 @@ def caput(pvname, value, wait=False, timeout=60):
     to wait for pv to complete processing, use 'wait=True':
        >>> caput('xx.VAL',3.0,wait=True)
     """
-    thispv = get_pv(pvname, connect=True)
+    start_time = time.time()
+    thispv = get_pv(pvname, timeout=timeout, connect=True)
     if thispv.connected:
+        timeout -= (time.time() - start_time)
         return thispv.put(value, wait=wait, timeout=timeout)
 
 def caget(pvname, as_string=False, count=None, as_numpy=True,
           use_monitor=False, timeout=5.0):
-    """caget(pvname, as_string=False)
+    """caget(pvname, as_string=False,count=None,as_numpy=True,
+             use_monitor=False,timeout=5.0)
     simple get of a pv's value..
        >>> x = caget('xx.VAL')
 
@@ -92,8 +95,8 @@ def caget(pvname, as_string=False, count=None, as_numpy=True,
         poll()
         return val
 
-def cainfo(pvname, print_out=True):
-    """cainfo(pvname,print_out=True)
+def cainfo(pvname, print_out=True, timeout=5.0):
+    """cainfo(pvname,print_out=True,timeout=5.0)
 
     return printable information about pv
        >>>cainfo('xx.VAL')
@@ -103,10 +106,13 @@ def cainfo(pvname, print_out=True):
     If print_out=False, the status report will be printed,
     and not returned.
     """
-    thispv = get_pv(pvname, connect=True)
+    start_time = time.time()
+    thispv = get_pv(pvname, timeout=timeout, connect=True)
     if thispv.connected:
-        thispv.get()
-        thispv.get_ctrlvars()
+        conn_time = time.time() - start_time
+        thispv.get(timeout=timeout-conn_time)
+        get_time = time.time() - start_time
+        thispv.get_ctrlvars(timeout=timeout-get_time)
         if print_out:
             ca.write(thispv.info)
         else:
@@ -152,27 +158,56 @@ def camonitor(pvname, writer=None, callback=None):
         thispv.add_callback(callback, index=-999, with_ctrlvars=True)
         _PVmonitors_[pvname] = thispv
 
-def caget_many(pvlist, as_string=False, count=None, as_numpy=True, timeout=5.0):
-    """get values for a list of PVs
-    This does not maintain PV objects, and works as fast
-    as possible to fetch many values.
+def caget_many(pvlist, as_string=False, as_numpy=True, count=None,
+               timeout=1.0, conn_timeout=1.0):
+    """get values for a list of PVs, working as fast as possible
+
+    Arguments
+    ---------
+     pvlist (list):        list of pv names to fetch
+     as_string (bool):     whether to get values as strings [False]
+     as_numpy (bool):      whether to get values as numpy arrys [True]
+     count  (int or None): max number of elements to get [None]
+     timeout (float):      timeout on *each* get()  [1.0]
+     conn_timeout (float): timeout for *all* pvs to connect [1.0]
+
+    Returns
+    --------
+      list of values, with `None` signifying 'not connected' or 'timed out'.
+
+    Notes
+    ------
+       this does not cache PV objects.
+
     """
-    chids, out = [], []
-    for name in pvlist: chids.append(ca.create_channel(name,
-                                                       auto_cb=False,
-                                                       connect=False))
-    for chid in chids: ca.connect_channel(chid)
-    for chid in chids: ca.get(chid, count=count, as_string=as_string, as_numpy=as_numpy, wait=False)
-    for chid in chids: out.append(ca.get_complete(chid, 
-                                                  count=count, 
-                                                  as_string=as_string, 
-                                                  as_numpy=as_numpy, 
-                                                  timeout=timeout))
+    chids, connected, out = [], [], []
+    for name in pvlist:
+        chids.append(ca.create_channel(name, auto_cb=False, connect=False))
+
+    all_connected = False
+    expire_time = time.time() + timeout
+    while (not all_connected and (time.time() < expire_time)):
+        connected = [dbr.CS_CONN==ca.state(chid) for chid in chids]
+        all_connected = all(connected)
+        poll()
+
+    for (chid, conn) in zip(chids, connected):
+        if conn:
+            ca.get(chid, count=count, as_string=as_string, as_numpy=as_numpy,
+                   wait=False)
+
+    poll()
+    for (chid, conn) in zip(chids, connected):
+        val = None
+        if conn:
+            val = ca.get_complete(chid, count=count, as_string=as_string,
+                                  as_numpy=as_numpy, timeout=timeout)
+        out.append(val)
     return out
 
 def caput_many(pvlist, values, wait=False, connection_timeout=None, put_timeout=60):
     """put values to a list of PVs, as fast as possible
-    This does not maintain the PV objects it makes.  If 
+    This does not maintain the PV objects it makes.  If
     wait is 'each', *each* put operation will block until
     it is complete or until the put_timeout duration expires.
     If wait is 'all', this method will block until *all*
@@ -186,7 +221,7 @@ def caput_many(pvlist, values, wait=False, connection_timeout=None, put_timeout=
     """
     if len(pvlist) != len(values):
         raise ValueError("List of PV names must be equal to list of values.")
-    out = []    
+    out = []
     pvs = [PV(name, auto_monitor=False, connection_timeout=connection_timeout) for name in pvlist]
     conns = [p.connected for p in pvs]
     wait_all = (wait == 'all')
@@ -203,5 +238,3 @@ def caput_many(pvlist, values, wait=False, connection_timeout=None, put_timeout=
         return [1 if (p.connected and p.put_complete) else -1 for p in pvs]
     else:
         return [o if o == 1 else -1 for o in out]
-        
-

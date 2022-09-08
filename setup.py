@@ -12,15 +12,16 @@ import versioneer
 long_desc = '''Python Interface to the Epics Channel Access protocol
 of the Epics control system.   PyEpics provides 3 layers of access to
 Channel Access (CA):
-  1. a light wrapping of the CA C library calls, using ctypes. This
-     provides a procedural CA library in which the user is expected
-     to manage Channel IDs. It is mostly provided as a foundation
-     upon which higher-level access is built.
-  2. PV() (Process Variable) objects, which represent the basic object
-     in CA, allowing one to keep a persistent connection to a remote
-     Process Variable.
-  3. A simple set of functions caget(), caput() and so on to mimic
-     the CA command-line tools and give the simplest access to CA.
+
+1. a light wrapping of the CA C library calls, using ctypes. This
+   provides a procedural CA library in which the user is expected
+   to manage Channel IDs. It is mostly provided as a foundation
+   upon which higher-level access is built.
+2. PV() (Process Variable) objects, which represent the basic object
+   in CA, allowing one to keep a persistent connection to a remote
+   Process Variable.
+3. A simple set of functions caget(), caput() and so on to mimic
+   the CA command-line tools and give the simplest access to CA.
 
 In addition, the library includes convenience classes to define
 Devices -- collections of PVs that might represent an Epics Record
@@ -45,7 +46,7 @@ problem before tyring to use the epics package.
 nolibca = os.environ.get('NOLIBCA', None)
 if nolibca is None:
     pkg_data = {'epics.clibs': ['darwin64/*', 'linux64/*', 'linux32/*',
-                                'win32/*', 'win64/*']}
+                                'linuxarm/*', 'win32/*', 'win64/*']}
 else:
     pkg_data = dict()
 

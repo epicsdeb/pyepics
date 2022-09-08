@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # unit-tests for ca interface
 
-import os
 import sys
 import time
 import unittest
 import numpy
+import threading
+import pytest
+
 from contextlib import contextmanager
-from epics import PV, caput, caget, caget_many, caput_many, ca
+from epics import PV, get_pv, caput, caget, caget_many, caput_many, ca
 
 import pvnames
 
@@ -32,22 +34,22 @@ def onChanges(pvname=None, value=None, **kws):
 def no_simulator_updates():
     '''Context manager which pauses and resumes simulator PV updating'''
     try:
-        caput(pvnames.pause_pv, 1)
+        caput(pvnames.pause_pv, 1, wait=True)
+        time.sleep(0.05)
         yield
     finally:
-        caput(pvnames.pause_pv, 0)
+        caput(pvnames.pause_pv, 0, wait=True)
 
 
 class PV_Tests(unittest.TestCase):
     def testA_CreatePV(self):
         write('Simple Test: create pv\n')
-        pv = PV(pvnames.double_pv)
+        pv = get_pv(pvnames.double_pv)
         self.assertIsNot(pv, None)
 
     def testA_CreatedWithConn(self):
         write('Simple Test: create pv with conn callback\n')
-        pv = PV(pvnames.int_pv,
-                connection_callback=onConnect)
+        pv = get_pv(pvnames.int_pv, connection_callback=onConnect)
         val = pv.get()
 
         global CONN_DAT
@@ -84,8 +86,8 @@ class PV_Tests(unittest.TestCase):
         self.assertEqual(success[0], 1)
         self.assertEqual(success[1], 1)
         self.failUnless(success[2] < 0)
-        
-    
+
+
     def test_caput_many_wait_each(self):
         write('Simple Test of caput_many() function, waiting for each.\n')
         pvs = [pvnames.double_pv, pvnames.enum_pv, 'ceci nest pas une PV']
@@ -113,16 +115,40 @@ class PV_Tests(unittest.TestCase):
     def test_get1(self):
         write('Simple Test: test value and char_value on an integer\n')
         with no_simulator_updates():
-            pv = PV(pvnames.int_pv)
+            pv = get_pv(pvnames.int_pv)
             val = pv.get()
             cval = pv.get(as_string=True)
 
             self.failUnless(int(cval)== val)
 
+    def test_get_with_metadata(self):
+        with no_simulator_updates():
+            pv = get_pv(pvnames.int_pv, form='native')
+
+            # Request time type
+            md = pv.get_with_metadata(use_monitor=False, form='time')
+            assert 'timestamp' in md
+            assert 'lower_ctrl_limit' not in md
+
+            # Request control type
+            md = pv.get_with_metadata(use_monitor=False, form='ctrl')
+            assert 'lower_ctrl_limit' in md
+            assert 'timestamp' not in md
+
+            # Use monitor: all metadata should come through
+            md = pv.get_with_metadata(use_monitor=True)
+            assert 'timestamp' in md
+            assert 'lower_ctrl_limit' in md
+
+            # Get a namespace
+            ns = pv.get_with_metadata(use_monitor=True, as_namespace=True)
+            assert hasattr(ns, 'timestamp')
+            assert hasattr(ns, 'lower_ctrl_limit')
+
     def test_get_string_waveform(self):
         write('String Array: \n')
         with no_simulator_updates():
-            pv = PV(pvnames.string_arr_pv)
+            pv = get_pv(pvnames.string_arr_pv)
             val = pv.get()
             self.failUnless(len(val) > 10)
             self.assertIsInstance(val[0], str)
@@ -133,7 +159,7 @@ class PV_Tests(unittest.TestCase):
     def test_putcomplete(self):
         write('Put with wait and put_complete (using real motor!) \n')
         vals = (1.35, 1.50, 1.44, 1.445, 1.45, 1.453, 1.446, 1.447, 1.450, 1.450, 1.490, 1.5, 1.500)
-        p = PV(pvnames.motor1)
+        p = get_pv(pvnames.motor1)
         # this works with a real motor, fail if it doesn't connect quickly
         if not p.wait_for_connection(timeout=0.2):
             self.skipTest('Unable to connect to real motor record')
@@ -154,7 +180,7 @@ class PV_Tests(unittest.TestCase):
 
     def test_putwait(self):
         write('Put with wait (using real motor!) \n')
-        pv = PV(pvnames.motor1)
+        pv = get_pv(pvnames.motor1)
         # this works with a real motor, fail if it doesn't connect quickly
         if not pv.wait_for_connection(timeout=0.2):
             self.skipTest('Unable to connect to real motor record')
@@ -212,7 +238,7 @@ class PV_Tests(unittest.TestCase):
     def test_get_callback(self):
         write("Callback test:  changing PV must be updated\n")
         global NEWVALS
-        mypv = PV(pvnames.updating_pv1)
+        mypv = get_pv(pvnames.updating_pv1)
         NEWVALS = []
         def onChanges(pvname=None, value=None, char_value=None, **kw):
             write( 'PV %s %s, %s Changed!\n' % (pvname, repr(value), char_value))
@@ -231,7 +257,7 @@ class PV_Tests(unittest.TestCase):
     def test_put_string_waveform(self):
         write('String Array: put\n')
         with no_simulator_updates():
-            pv = PV(pvnames.string_arr_pv)
+            pv = get_pv(pvnames.string_arr_pv)
             put_value = ['a', 'b', 'c']
             pv.put(put_value, wait=True)
             get_value = pv.get(use_monitor=False, as_numpy=False)
@@ -240,7 +266,7 @@ class PV_Tests(unittest.TestCase):
     def test_put_string_waveform_single_element(self):
         write('String Array: put single element\n')
         with no_simulator_updates():
-            pv = PV(pvnames.string_arr_pv)
+            pv = get_pv(pvnames.string_arr_pv)
             put_value = ['a']
             pv.put(put_value, wait=True)
             time.sleep(0.05)
@@ -250,7 +276,7 @@ class PV_Tests(unittest.TestCase):
     def test_put_string_waveform_mixed_types(self):
         write('String Array: put mixed types\n')
         with no_simulator_updates():
-            pv = PV(pvnames.string_arr_pv)
+            pv = get_pv(pvnames.string_arr_pv)
             put_value = ['a', 2, 'b']
             pv.put(put_value, wait=True)
             time.sleep(0.05)
@@ -260,7 +286,7 @@ class PV_Tests(unittest.TestCase):
     def test_put_string_waveform_empty_list(self):
         write('String Array: put empty list\n')
         with no_simulator_updates():
-            pv = PV(pvnames.string_arr_pv)
+            pv = get_pv(pvnames.string_arr_pv)
             put_value = []
             pv.put(put_value, wait=True)
             time.sleep(0.05)
@@ -270,7 +296,7 @@ class PV_Tests(unittest.TestCase):
     def test_put_string_waveform_zero_length_strings(self):
         write('String Array: put zero length strings\n')
         with no_simulator_updates():
-            pv = PV(pvnames.string_arr_pv)
+            pv = get_pv(pvnames.string_arr_pv)
             put_value = ['', '', '']
             pv.put(put_value, wait=True)
             time.sleep(0.05)
@@ -279,8 +305,8 @@ class PV_Tests(unittest.TestCase):
 
     def test_subarrays(self):
         write("Subarray test:  dynamic length arrays\n")
-        driver = PV(pvnames.subarr_driver)
-        subarr1 = PV(pvnames.subarr1)
+        driver = get_pv(pvnames.subarr_driver)
+        subarr1 = get_pv(pvnames.subarr1)
         subarr1.connect()
 
         len_full = 64
@@ -301,7 +327,7 @@ class PV_Tests(unittest.TestCase):
         caput("%s.NELM" % pvnames.subarr2, 19)
         caput("%s.INDX" % pvnames.subarr2, 3)
 
-        subarr2 = PV(pvnames.subarr2)
+        subarr2 = get_pv(pvnames.subarr2)
         subarr2.get()
 
         driver.put(full_data) ;   time.sleep(0.1)
@@ -320,7 +346,7 @@ class PV_Tests(unittest.TestCase):
         self.failUnless(numpy.all(subval == full_data[13:5+13]))
 
     def test_subarray_zerolen(self):
-        subarr1 = PV(pvnames.zero_len_subarr1)
+        subarr1 = get_pv(pvnames.zero_len_subarr1)
         subarr1.wait_for_connection()
 
         val = subarr1.get(use_monitor=True, as_numpy=True)
@@ -336,6 +362,8 @@ class PV_Tests(unittest.TestCase):
 
     def test_waveform_get_with_count_arg(self):
         with no_simulator_updates():
+            # NOTE: do not use get_pv() here, as `count` is incompatible with
+            # the cache
             wf = PV(pvnames.char_arr_pv, count=32)
             val=wf.get()
             self.assertEquals(len(val), 32)
@@ -347,6 +375,8 @@ class PV_Tests(unittest.TestCase):
     def test_waveform_callback_with_count_arg(self):
         values = []
 
+        # NOTE: do not use get_pv() here, as `count` is incompatible with
+        # the cache
         wf = PV(pvnames.char_arr_pv, count=32)
         def onChanges(pvname=None, value=None, char_value=None, **kw):
             write( 'PV %s %s, %s Changed!\n' % (pvname, repr(value), char_value))
@@ -389,6 +419,7 @@ class PV_Tests(unittest.TestCase):
             numpy.testing.assert_array_equal(zerostr.get(as_string=False), [0, 0])
             self.assertEquals(zerostr.get(as_string=True, as_numpy=False), '')
             numpy.testing.assert_array_equal(zerostr.get(as_string=False, as_numpy=False), [0, 0])
+            zerostr.disconnect()
 
     def test_emptyish_char_waveform_monitor(self):
         '''a test of a char waveform of length 1 (NORD=1): value "\0"
@@ -413,9 +444,10 @@ class PV_Tests(unittest.TestCase):
             numpy.testing.assert_array_equal(zerostr.get(as_string=False), [0, 0])
             self.assertEquals(zerostr.get(as_string=True, as_numpy=False), '')
             numpy.testing.assert_array_equal(zerostr.get(as_string=False, as_numpy=False), [0, 0])
+            zerostr.disconnect()
 
     def testEnumPut(self):
-        pv = PV(pvnames.enum_pv)
+        pv = get_pv(pvnames.enum_pv)
         self.assertIsNot(pv, None)
         pv.put('Stop')
         time.sleep(0.1)
@@ -425,7 +457,7 @@ class PV_Tests(unittest.TestCase):
 
     def test_DoubleVal(self):
         pvn = pvnames.double_pv
-        pv = PV(pvn)
+        pv = get_pv(pvn)
         pv.get()
         cdict  = pv.get_ctrlvars()
         write( 'Testing CTRL Values for a Double (%s)\n'   % (pvn))
@@ -471,15 +503,15 @@ class PV_Tests(unittest.TestCase):
                         self.assertEqual(a, b)
 
     def test_waveform_get_1elem(self):
-        pv = PV(pvnames.double_arr_pv)
+        pv = get_pv(pvnames.double_arr_pv)
         val = pv.get(count=1, use_monitor=False)
         self.failUnless(isinstance(val, numpy.ndarray))
         self.failUnless(len(val), 1)
 
     def test_subarray_1elem(self):
         with no_simulator_updates():
-            # pv = PV(pvnames.zero_len_subarr1)
-            pv = PV(pvnames.double_arr_pv)
+            # pv = get_pv(pvnames.zero_len_subarr1)
+            pv = get_pv(pvnames.double_arr_pv)
             pv.wait_for_connection()
 
             val = pv.get(count=1, use_monitor=False)
@@ -491,6 +523,96 @@ class PV_Tests(unittest.TestCase):
             print('val is', val, type(val))
             self.assertIsInstance(val, list)
             self.assertEqual(len(val), 1)
+
+
+@pytest.mark.parametrize('num_threads', [1, 10, 200])
+@pytest.mark.parametrize('thread_class', [ca.CAThread, threading.Thread])
+def test_multithreaded_get(num_threads, thread_class):
+    def thread(thread_idx):
+        result[thread_idx] = (pv.get(),
+                              pv.get_with_metadata(form='ctrl')['value'],
+                              pv.get_with_metadata(form='time')['value'],
+                              )
+
+    result = {}
+    ca.use_initial_context()
+    pv = get_pv(pvnames.double_pv)
+
+    threads = [thread_class(target=thread, args=(i, ))
+               for i in range(num_threads)]
+
+    with no_simulator_updates():
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    assert len(result) == num_threads
+    print(result)
+    values = set(result.values())
+    assert len(values) == 1
+
+    value, = values
+    assert value is not None
+
+
+@pytest.mark.parametrize('num_threads', [1, 10, 100])
+def test_multithreaded_put_complete(num_threads):
+    def callback(pvname, data):
+        result.append(data)
+
+    def thread(thread_idx):
+        pv.put(thread_idx, callback=callback,
+               callback_data=dict(data=thread_idx),
+               wait=True)
+        time.sleep(0.1)
+
+    result = []
+    ca.use_initial_context()
+    pv = get_pv(pvnames.double_pv)
+
+    threads = [ca.CAThread(target=thread, args=(i, ))
+               for i in range(num_threads)]
+
+    with no_simulator_updates():
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    assert len(result) == num_threads
+    print(result)
+    assert set(result) == set(range(num_threads))
+
+
+def test_force_connect():
+    pv = get_pv(pvnames.double_arrays[0], auto_monitor=True)
+
+    print("Connecting")
+    assert pv.wait_for_connection(5.0)
+
+    print("SUM", pv.get().sum())
+
+    time.sleep(3)
+
+    print("Disconnecting")
+    pv.disconnect()
+    print("Reconnecting")
+
+    pv.force_connect()
+    assert pv.wait_for_connection(5.0)
+
+    called = {'called': False}
+
+    def callback(value=None, **kwargs):
+        called['called'] = True
+        print("update", value.sum())
+
+    pv.add_callback(callback)
+
+    time.sleep(1)
+    assert pv.get() is not None
+    assert called['called']
 
 
 if __name__ == '__main__':
